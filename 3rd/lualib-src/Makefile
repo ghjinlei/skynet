@@ -2,7 +2,7 @@ include ../../platform.mk
 
 LUACLIB_DIR = ../../luaclib
 
-LUACLIB_NAMES = lfs lunix
+LUACLIB_NAMES = lfs lunix lrc4
 
 LUA_INC ?= ../lua
 CFLAGS = -g -O2 -Wall -I$(LUA_INC) $(MYCFLAGS)
@@ -15,6 +15,9 @@ $(LUACLIB_DIR)/lfs.so: lfs.c | $(LUACLIB_DIR)
 	$(CC) $(CFLAGS) $(SHARED) $^ -o $@
 
 $(LUACLIB_DIR)/lunix.so: lunix.c | $(LUACLIB_DIR)
+	$(CC) $(CFLAGS) $(SHARED) $^ -o $@
+
+$(LUACLIB_DIR)/lrc4.so: rc4/lrc4.c rc4/rc4.c | $(LUACLIB_DIR)
 	$(CC) $(CFLAGS) $(SHARED) $^ -o $@
 
 clean:
