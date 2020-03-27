@@ -234,7 +234,8 @@ static int lua_rc4_unpack_with_len(lua_State *L)
     return 3;
 }
 
-static int opencls_rc4(lua_State *L)
+LUAMOD_API int
+luaopen_lrc4(lua_State* L)
 {
     luaL_Reg lmethods[] = {
         {"reset",             lua_rc4_reset},
@@ -250,17 +251,12 @@ static int opencls_rc4(lua_State *L)
     lua_setfield(L, -2, "__index");
     lua_pushcfunction(L, lua_rc4_gc);
     lua_setfield(L, -2, "__gc");
-    return 1;
-}
+    lua_pop(L, 1);
 
-LUAMOD_API int
-luaopen_lrc4(lua_State* L)
-{
     luaL_Reg lfuncs[] = {
         {"new",      lua_rc4_new},
         {NULL, NULL},
     };
-    opencls_rc4(L);
     luaL_newlib(L, lfuncs);
     return 1;
 }
