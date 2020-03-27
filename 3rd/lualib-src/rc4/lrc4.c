@@ -119,7 +119,7 @@ static int lua_rc4_pack_with_len(lua_State *L)
     char *out;
     rc4_state_t *s = CHECK_RC4OBJ(L, 1);
     const char *data = luaL_checklstring(L, 2, &sz);
-    uint16_t idx = luaL_checkinteger(L, 3);
+    uint16_t idx = luaL_optinteger(L, 3, -1);
 
     /* length(2) + pack_data(N + 6) */
     char *ptr = malloc(sz + 8);
@@ -202,7 +202,7 @@ static int lua_rc4_unpack_with_len(lua_State *L)
 
     data += start;
     pack_len = ((size_t)data[1]) << 8 | ((size_t)data[0]);
-    if (pack_len + 2 + start > sz) {
+    if (start + 2 + pack_len > sz) {
         lua_pushnil(L);
         return 1;
     }
@@ -227,7 +227,7 @@ static int lua_rc4_unpack_with_len(lua_State *L)
 
     lua_pushlstring(L, (const char*) out, out_len);
     lua_pushnil(L);
-    lua_pushinteger(L, start + pack_len);
+    lua_pushinteger(L, start + 2 + pack_len);
 
     free(out);
 
