@@ -73,12 +73,29 @@ uint32_t adler32(uint8_t *data, size_t len)
     return (b << 16) | a;
 }
 
-static void pack_data(rc4_state_t *s, uint8_t *data, size_t sz, uint16_t idx, uint8_t *out)
+static int lua_rc4_pack(lua_State *L)
 {
+    size_t sz, out_sz;
     uint32_t sum, sum_high, sum_low;
+    uint8_t *ptr, *out;
+    rc4_state_t *s = CHECK_RC4OBJ(L, 1);
+    const char *data = luaL_checklstring(L, 2, &sz);
+    uint16_t idx = luaL_optinteger(L, 3, 0);
 
+    ptr = malloc(sz + 8);
+    if (ptr == NULL) {
+        lua_pushnil(L);
+        lua_pushstring(L, "lack of memory");
+        return 2;
+    }
+
+    out_sz = sz + 6;
+    ptr[0] = out_sz / 256;
+    ptr[1] = out_sz % 256;
+
+    out = ptr + 2;
     /*msg(N) + sum(4) + idx(2) */
-    rc4_crypt(s, data, out, sz);
+    rc4_crypt(s, (uint8_t *)data, out, sz);
     sum = adler32(out, sz);
     sum_high = sum / 65536;
     sum_low = sum % 65536;
@@ -89,149 +106,123 @@ static void pack_data(rc4_state_t *s, uint8_t *data, size_t sz, uint16_t idx, ui
     out[sz + 3] = sum_low % 256;
     out[sz + 4] = idx / 256;
     out[sz + 5] = idx % 256;
-}
 
-static int lua_rc4_pack(lua_State *L)
-{
-    size_t sz;
-    rc4_state_t *s = CHECK_RC4OBJ(L, 1);
-    const char *data = luaL_checklstring(L, 2, &sz);
-    uint16_t idx = luaL_checkinteger(L, 3);
-
-    /* pack_data(N + 6) */
-    char *ptr = malloc(sz + 6);
-    if (ptr == NULL) {
-        lua_pushnil(L);
-        lua_pushstring(L, "lack of memery");
-        return 2;
-    }
-    pack_data(s, (uint8_t *)data, sz, idx, (uint8_t *)ptr);
-
-    lua_pushlstring(L, ptr, sz + 6);
+    lua_pushlstring(L, (const char *)ptr, sz + 8);
     free(ptr);
 
     return 1;
 }
 
-static int lua_rc4_pack_with_len(lua_State *L)
-{
-    size_t sz;
-    char *out;
-    rc4_state_t *s = CHECK_RC4OBJ(L, 1);
-    const char *data = luaL_checklstring(L, 2, &sz);
-    uint16_t idx = luaL_optinteger(L, 3, -1);
-
-    /* length(2) + pack_data(N + 6) */
-    char *ptr = malloc(sz + 8);
-    if (ptr == NULL) {
-        lua_pushnil(L);
-        lua_pushstring(L, "lack of memery");
-        return 2;
-    }
-    out = ptr + 2;
-
-    pack_data(s, (uint8_t *)data, sz, idx, (uint8_t *)out);
-    ptr[0] = (sz + 6) / 256;
-    ptr[1] = (sz + 6) % 256;
-
-    lua_pushlstring(L, ptr, sz + 8);
-    free(ptr);
-
-    return 1;
-}
-
-
-static int adler32_check(uint8_t *data, size_t len)
-{
-    uint32_t sum, ori_sum;
-    sum = adler32(data, len - 6);
-    ori_sum = ((uint32_t)data[len - 6]) << 24 | ((uint32_t)data[len - 5]) << 16 | ((uint32_t)data[len - 4]) << 8 | ((uint32_t)data[len - 3]);
-    return sum == ori_sum ? 1 : 0;
-}
-
-static int index_check(uint8_t *data, size_t len, uint16_t check_idx)
+static int index_check(uint8_t *data, size_t sz, uint16_t check_idx)
 {
     uint16_t idx;
-    idx = ((uint16_t)data[len - 2]) << 8 | ((uint16_t)data[len - 1]);
+    idx = ((uint16_t)data[sz - 2]) << 8 | ((uint16_t)data[sz - 1]);
     if (check_idx > 0 && check_idx != idx) {
         return 0;
     }
     return 1;
 }
 
-static int lua_rc4_unpack(lua_State *L)
+static int adler32_check(uint8_t *data, size_t sz)
 {
-    size_t pack_len, out_len;
-
-    rc4_state_t *s = CHECK_RC4OBJ(L, 1);
-    uint8_t *data = (uint8_t *)lua_touserdata(L, 2);
-    pack_len = (size_t)luaL_checkinteger(L, 3);
-    uint16_t check_idx = (uint16_t)luaL_optinteger(L, 4, -1);
-
-    if (!index_check(data, pack_len, check_idx)) {
-        lua_pushnil(L);
-        lua_pushstring(L, "idx not match");
-        return  2;
-    }
-
-    if (!adler32_check(data, pack_len)) {
-        lua_pushnil(L);
-        lua_pushstring(L, "sum not match");
-        return  2;
-    }
-
-    out_len = pack_len - 6;
-    uint8_t *out = (uint8_t *)malloc(out_len);
-
-    rc4_crypt(s, data, out, out_len);
-
-    lua_pushlstring(L, (const char*) out, out_len);
-
-    free(out);
-
-    return 2;
+    uint32_t sum, ori_sum;
+    sum = adler32(data, sz - 6);
+    ori_sum = ((uint32_t)data[sz - 6]) << 24 | ((uint32_t)data[sz - 5]) << 16 | ((uint32_t)data[sz - 4]) << 8 | ((uint32_t)data[sz - 3]);
+    return sum == ori_sum ? 1 : 0;
 }
 
-static int lua_rc4_unpack_with_len(lua_State *L)
+static int lua_rc4_unpack(lua_State *L)
 {
-    size_t sz, pack_len, out_len;
+    size_t sz, out_len;
     rc4_state_t *s = CHECK_RC4OBJ(L, 1);
     uint8_t *data = (uint8_t *)luaL_checklstring(L, 2, &sz);
-    uint16_t check_idx = luaL_optinteger(L, 3, -1);
-    int start = (int)luaL_optinteger(L, 4, -1);
+    uint16_t check_idx = (uint16_t)luaL_optinteger(L, 3, 0);
 
-    data += start;
-    pack_len = ((size_t)data[1]) << 8 | ((size_t)data[0]);
-    if (start + 2 + pack_len > sz) {
-        lua_pushnil(L);
-        return 1;
-    }
-
-    data += 2;
-    if (!index_check(data, pack_len, check_idx)) {
+    if (!index_check(data, sz, check_idx)) {
         lua_pushnil(L);
         lua_pushstring(L, "idx not match");
         return  2;
     }
 
-    if (!adler32_check(data, pack_len)) {
+    out_len = sz - 6;
+    if (!adler32_check(data, sz)) {
         lua_pushnil(L);
         lua_pushstring(L, "sum not match");
         return  2;
     }
 
-    out_len = pack_len - 6;
     uint8_t *out = (uint8_t *)malloc(out_len);
 
     rc4_crypt(s, data, out, out_len);
 
     lua_pushlstring(L, (const char*) out, out_len);
-    lua_pushnil(L);
-    lua_pushinteger(L, start + 2 + pack_len);
-
     free(out);
 
-    return 3;
+    return 1;
+}
+
+static int lua_xor_pack(lua_State *L)
+{
+    size_t sz;
+    uint8_t *ptr, *out;
+    const char *data = luaL_checklstring(L, 1, &sz);
+    uint8_t key = (uint8_t)luaL_checkinteger(L, 2);
+
+    if (sz > 65534) {
+        lua_pushnil(L);
+        lua_pushstring(L, "data size is bigger than 64K");
+        return 2;
+    }
+    ptr = (uint8_t *)malloc(sz + 2);
+    if (!ptr) {
+        lua_pushnil(L) ;
+        lua_pushstring(L, "lack of memory");
+        return 2;
+    }
+
+    ptr[0] = sz / 256;
+    ptr[1] = sz % 256;
+
+    out = ptr + 2;
+    for (int i = 0; i < sz; i++) {
+        out[i] = data[i] ^ key;
+    }
+
+    lua_pushlstring(L, (const char *)ptr, sz + 2);
+    free(ptr);
+
+    return 1;
+}
+
+static int lua_xor_unpack(lua_State *L)
+{
+    size_t sz, out_sz;
+    uint8_t *out;
+    uint8_t *data = (uint8_t *)luaL_checklstring(L, 1, &sz);
+    uint8_t key = (uint8_t)luaL_checkinteger(L, 2);
+    int start_idx = luaL_optinteger(L, 3, 0);
+
+    if (start_idx < 0 || start_idx + 2 >= sz) {
+        lua_pushnil(L);
+        lua_pushstring(L, "start index error");
+        return 2;
+    }
+
+    data += start_idx;
+
+    out_sz = ((uint8_t)data[0]) << 8 | (uint8_t)data[1];
+    out = (uint8_t *)malloc(out_sz);
+
+    data += 2;
+
+    for (int i = 0; i < out_sz; i++) {
+        out[i] = data[i] ^ key;
+    }
+
+    lua_pushlstring(L, (const char *)out, out_sz);
+    free(out);
+
+    return 1;
 }
 
 LUAMOD_API int
@@ -242,8 +233,6 @@ luaopen_lrc4(lua_State* L)
         {"crypt",             lua_rc4_crypt},
         {"pack",              lua_rc4_pack},
         {"unpack",            lua_rc4_unpack},
-        {"pack_with_len",     lua_rc4_pack_with_len},
-        {"unpack_with_len",   lua_rc4_unpack_with_len},
         {NULL, NULL},
     };
     luaL_newmetatable(L, RC4_CLS_NAME);
@@ -255,6 +244,8 @@ luaopen_lrc4(lua_State* L)
 
     luaL_Reg lfuncs[] = {
         {"new",      lua_rc4_new},
+        {"xor_pack", lua_xor_pack},
+        {"xor_unpack", lua_xor_unpack},
         {NULL, NULL},
     };
     luaL_newlib(L, lfuncs);

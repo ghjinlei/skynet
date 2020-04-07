@@ -56,7 +56,7 @@ static struct unix_const const_signal[] = {
 #endif
 }; /* const_signal[] */
 
-static int lua___uname(lua_State *L)
+static int lua_uname(lua_State *L)
 {
         struct utsname name;
 
@@ -122,39 +122,35 @@ static int lua___uname(lua_State *L)
         }
 }
 
-static int register_const(lua_State *L,
-			  int idx,
-			  const char *name,
-			  struct unix_const *array,
-			  size_t size)
+static int register_const(lua_State *L, int idx, const char *name, struct unix_const *array, size_t size)
 {
-	int i;
-	lua_pushvalue(L, idx);
-        lua_newtable(L);
-        for (i = 0; i < size; i++) {
-                lua_pushstring(L, array[i].name);
-                lua_pushinteger(L, array[i].value);
-                lua_settable(L, -3);
-                /* code */
-        }
-        lua_setfield(L, -2, name);
-	lua_pop(L, 1);
-	return 0;
+    int i;
+    lua_pushvalue(L, idx);
+    lua_newtable(L);
+    for (i = 0; i < size; i++) {
+            lua_pushstring(L, array[i].name);
+            lua_pushinteger(L, array[i].value);
+            lua_settable(L, -3);
+            /* code */
+    }
+    lua_setfield(L, -2, name);
+    lua_pop(L, 1);
+    return 0;
 }
 
-static int lua__getpid(lua_State *L)
+static int lua_getpid(lua_State *L)
 {
 	lua_pushinteger(L, (lua_Integer)getpid());
 	return 1;
 }
 
-static int lua__getppid(lua_State *L)
+static int lua_getppid(lua_State *L)
 {
 	lua_pushinteger(L, (lua_Integer)getppid());
 	return 1;
 }
 
-static int lua__set_process_title(lua_State *L)
+static int lua_set_process_title(lua_State *L)
 {
 	const char *title = luaL_checkstring(L, 1);
 	int ret = 0;
@@ -184,50 +180,7 @@ static int lua__set_process_title(lua_State *L)
 	return 1;
 }
 
-extern char ** environ;
-static int l__set_argv0(lua_State *L)
-{
-	int maxSearchLen = (int)luaL_checknumber(L, 1);
-	if(maxSearchLen <= 0 || maxSearchLen > 1000)
-	{
-		return luaL_argerror(L, 1, "parameter maxSearchLen invalid");
-	}
-
-	const char *title = luaL_checkstring(L, 2);
-	const char *arg0Cmp = luaL_checkstring(L, 3);
-
-	int titleLen = strlen(title);
-	int arg0CmpLen = strlen(arg0Cmp);
-
-	if( titleLen > arg0CmpLen)
-	{
-		return luaL_error(L, "title len is too long then arg0CmpLen");
-	}
-
-	char* argvEnd = environ[0] - 1;
-	char * argv0 = 0;
-	int i = 0;
-	for(i = arg0CmpLen; i < maxSearchLen;++i)
-	{
-		if( 0 == strcmp(arg0Cmp, argvEnd - i) )
-		{
-			argv0 = argvEnd - i;
-			break;
-		}
-	}
-
-	if( 0 == argv0)
-	{
-		return luaL_error(L, "can not find compare string");
-	}
-
-	memset(argv0, 0 ,arg0CmpLen);
-	strcpy(argv0, title);
-	lua_pushboolean(L, 1);
-	return 1;
-}
-
-static int l_sleep(lua_State *L)
+static int lua_sleep(lua_State *L)
 {
 	double t = luaL_checknumber(L, 1);
 	usleep(t * 1e6);
@@ -236,21 +189,20 @@ static int l_sleep(lua_State *L)
 
 int luaopen_lunix(lua_State* L)
 {
-        luaL_Reg lfuncs[] = {
-                {"sleep", l_sleep},
-                {"uname", lua___uname},
-		{"getpid", lua__getpid},
-		{"getppid", lua__getppid},
-		{"set_process_title", lua__set_process_title},
-		{"set_argv0", l__set_argv0},
-                {NULL, NULL},
-        };
-        luaL_newlib(L, lfuncs);
-        register_const(L,
-		       -1,
-		       "SIGNALS",
-		       const_signal,
-		       sizeof(const_signal)/sizeof(const_signal[0]));
+    luaL_Reg lfuncs[] = {
+        {"sleep", lua_sleep},
+        {"uname", lua_uname},
+        {"getpid", lua_getpid},
+        {"getppid", lua_getppid},
+        {"set_process_title", lua_set_process_title},
+        {NULL, NULL},
+    };
+    luaL_newlib(L, lfuncs);
+    register_const(L,
+       -1,
+       "SIGNALS",
+       const_signal,
+       sizeof(const_signal)/sizeof(const_signal[0]));
 
-        return 1;
+    return 1;
 }
