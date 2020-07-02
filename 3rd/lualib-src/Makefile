@@ -2,7 +2,7 @@ include ../../platform.mk
 
 LUACLIB_DIR = ../../luaclib
 
-LUACLIB_NAMES = lfs lunix lrc4 laoi ltrace
+LUACLIB_NAMES = lfs lunix lrc4 laoi ltrace lmisc
 
 LUA_INC ?= ../lua
 CFLAGS = -g -O0 -Wall -I$(LUA_INC) $(MYCFLAGS)
@@ -24,6 +24,9 @@ $(LUACLIB_DIR)/laoi.so: aoi/laoi.c aoi/aoi.c | $(LUACLIB_DIR)
 	$(CC) $(CFLAGS) $(SHARED) $^ -o $@
 
 $(LUACLIB_DIR)/ltrace.so: ltrace.c | $(LUACLIB_DIR)
+	$(CC) $(CFLAGS) $(SHARED) $^ -o $@
+
+$(LUACLIB_DIR)/lmisc.so: lmisc/lmisc.c lmisc/bresenham.c | $(LUACLIB_DIR)
 	$(CC) $(CFLAGS) $(SHARED) $^ -o $@
 
 clean:
